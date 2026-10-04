@@ -1,2 +1,2 @@
 # RISC-V-emulator-in-Rust
-#Faculty project
+# Just a Project
