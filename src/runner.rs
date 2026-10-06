@@ -35,13 +35,12 @@ pub fn run(v: &Vec<u8>) {
 			}};
 			// E(n)(c) <=> n extins cu msb-ul de pe pozitia c
 			let E = |n: u32| { move |c: u32| {
-				((n as i32 << 32 - c - 1) >> 32 - c - 1) as u32
+				(((n as i32) << 32 - c - 1) >> 32 - c - 1) as u32
 			}};
 
 			let opcode = I(instr)(6, 0);
 			match opcode {
-				// Tip R
-				0b0110011 => {
+				/* (R)    */ 0b0110011 => {
 					let rd     = I(instr)(11, 7) as usize;
 					let funct3 = I(instr)(14, 12);
 					let rs1    = I(instr)(19, 15) as usize;
@@ -58,51 +57,38 @@ pub fn run(v: &Vec<u8>) {
 						/* sra  */ (0x5, 0x20) => x[rd] = ((x[rs1] as i32) >> x[rs2]) as u32,
 						/* slt  */ (0x2, 0x00) => x[rd] = if (x[rs1] as i32) < (x[rs2] as i32) { 1 } else { 0 },
 						/* sltu */ (0x3, 0x00) => x[rd] = if x[rs1] < x[rs2] { 1 } else { 0 },
-						_                      => bad()
+						/*      */ (___, ____) => bad()
 					}
 				},
-				// Tip I (#1)
-				0b0010011 => {
+				/* (I #1) */ 0b0010011 => {
 					let rd     = I(instr)(11, 7) as usize;
 					let funct3 = I(instr)(14, 12);
 					let rs1    = I(instr)(19, 15) as usize;
 					let imm    = E(I(instr)(31, 20))(11);
-					match I(imm)(11, 5) {
-						0x00 => match funct3 {
-							/* slli  */ 0x1 => x[rd] = x[rs1] << I(imm)(0, 4),
-							/* srli  */ 0x5 => x[rd] = x[rs1] >> I(imm)(0, 4),
-							_               => bad()
-						},
-						0x20 => match funct3 {
-							/* srai  */ 0x5 => x[rd] = ((x[rs1] as i32) >> I(imm)(0, 4)) as u32,
-							_               => bad()
-						},
-						_    => match funct3{
-							/* addi  */ 0x0 => x[rd] = x[rs1] + imm,
-							/* xori  */ 0x4 => x[rd] = x[rs1] ^ imm,
-							/* ori   */ 0x6 => x[rd] = x[rs1] | imm,
-							/* andi  */ 0x7 => x[rd] = x[rs1] & imm,
-							/* slti  */ 0x2 => x[rd] = if (x[rs1] as i32) < (imm as i32) { 1 } else { 0 },
-							/* sltiu */ 0x3 => x[rd] = if x[rs1] < imm { 1 } else { 0 },
-							_               => bad()
-						}
+					match (funct3, I(imm)(11, 5)) {
+						/* slli  */ (0x1, 0x00) => x[rd] = x[rs1] << I(imm)(0, 4),
+						/* srli  */ (0x5, 0x00) => x[rd] = x[rs1] >> I(imm)(0, 4),
+						
+						/* srai  */ (0x5, 0x20) => x[rd] = ((x[rs1] as i32) >> I(imm)(0, 4)) as u32,
+						
+						/* addi  */ (0x0, ____) => x[rd] = x[rs1] + imm,
+						/* xori  */ (0x4, ____) => x[rd] = x[rs1] ^ imm,
+						/* ori   */ (0x6, ____) => x[rd] = x[rs1] | imm,
+						/* andi  */ (0x7, ____) => x[rd] = x[rs1] & imm,
+						/* slti  */ (0x2, ____) => x[rd] = if (x[rs1] as i32) < (imm as i32) { 1 } else { 0 },
+						/* sltiu */ (0x3, ____) => x[rd] = if x[rs1] < imm { 1 } else { 0 },
+						/*       */ (___, ____) => bad()
 					}
 				},
-				// Tip I (#2)
-				0b0000011 => {
+				/* (I #2) */ 0b0000011 => {
 					let rd     = I(instr)(11, 7) as usize;
 					let funct3 = I(instr)(14, 12);
 					let rs1    = I(instr)(19, 15) as usize;
 					let imm    = E(I(instr)(31, 20))(11);
-					match funct3 {
-						/* lb */ // wip
-						// wip
-						_ => bad()
-					}
+					// wip
 				},
-
 				// wip
-				_ => bad()
+				/*       */  _________ => bad()
 			}
 		} else {
 			// wip
