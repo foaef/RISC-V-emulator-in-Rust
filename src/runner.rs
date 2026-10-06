@@ -52,17 +52,17 @@ pub fn run(v: &Vec<u8>) {
 			};
 			unsafe {
 				// "RV32I Base Integer Instructions"
-				// Name     Opcode        FMT      funct3  funct7  Description (C)                               Note
-				/* add  */  act(0b110011, /* R */  0x0,    0x00,   &||{*rd = *rs1 + *rs2});
-				/* sub  */  act(0b110011, /* R */  0x0,    0x20,   &||{*rd = *rs1 - *rs2});
-				/* xor  */  act(0b110011, /* R */  0x4,    0x00,   &||{*rd = *rs1 ^ *rs2});
-				/* or   */  act(0b110011, /* R */  0x6,    0x00,   &||{*rd = *rs1 | *rs2});
-				/* and  */  act(0b110011, /* R */  0x7,    0x00,   &||{*rd = *rs1 & *rs2});
-				/* sll  */  act(0b110011, /* R */  0x1,    0x00,   &||{*rd = *rs1 << *rs2});
-				/* srl  */  act(0b110011, /* R */  0x5,    0x00,   &||{*rd = *rs1 >> *rs2});
-				/* sra  */  act(0b110011, /* R */  0x5,    0x20,   &||{*rd = ((*rs1 as i32) >> *rs2) as u32});   /* msb-extends */
-				/* slt  */  act(0b110011, /* R */  0x2,    0x00,   &||{*rd = ((*rs1 as i32) < (*rs2 as i32))});
-				/* sltu */  act(0b110011, /* R */  0x3,    0x00,   &||{*rd = *rs1 < *rs2});
+				// Name     Opcode        FMT      funct3  funct7  Description (C)                                                   Note
+				/* add  */  act(0b0110011, /* R */  0x0,    0x00,   &||{*rd = *rs1 + *rs2});
+				/* sub  */  act(0b0110011, /* R */  0x0,    0x20,   &||{*rd = *rs1 - *rs2});
+				/* xor  */  act(0b0110011, /* R */  0x4,    0x00,   &||{*rd = *rs1 ^ *rs2});
+				/* or   */  act(0b0110011, /* R */  0x6,    0x00,   &||{*rd = *rs1 | *rs2});
+				/* and  */  act(0b0110011, /* R */  0x7,    0x00,   &||{*rd = *rs1 & *rs2});
+				/* sll  */  act(0b0110011, /* R */  0x1,    0x00,   &||{*rd = *rs1 << *rs2});
+				/* srl  */  act(0b0110011, /* R */  0x5,    0x00,   &||{*rd = *rs1 >> *rs2});
+				/* sra  */  act(0b0110011, /* R */  0x5,    0x20,   &||{*rd = ((*rs1 as i32) >> *rs2) as u32});                      /* msb-extends */
+				/* slt  */  act(0b0110011, /* R */  0x2,    0x00,   &||{*rd = if (*rs1 as i32) < (*rs2 as i32) { 1 } else { 0 }});
+				/* sltu */  act(0b0110011, /* R */  0x3,    0x00,   &||{*rd = if *rs1 < *rs2 { 1 } else { 0 }});
 				// wip
 
 				// "RV32M Multiply Extension"
