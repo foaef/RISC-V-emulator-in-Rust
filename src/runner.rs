@@ -5,6 +5,8 @@ pub fn run(v: &Vec<u8>) {
 	let mut f: [u32; 32] = [0; 32];
 
 	while (pc as usize) < v.len() {
+		x[0] = 0;
+
 		/* pasul 1   fetch
 			daca primul octet citit are ultimii doi biti 1 atunci
 				instructiunea are 4 octeti
@@ -24,54 +26,83 @@ pub fn run(v: &Vec<u8>) {
 			https://www.cs.sfu.ca/~ashriram/Courses/CS295/assets/notebooks/RISCV/RISCV_CARD.pdf
 			de aici sunt si titlurile tabelului
 		*/
+		let bad = || { panic!("instructiune gresita sau neimplementata"); };
 		if lun == 4 {
-			// pt interval [l:r]
-			let I = |mut l: usize, mut r: usize| {
-				if l < r {
-					let t = l;
-					l = r;
-					r = t
-				}
-				(instr >> r) & ((1 << (l - r + 1)) - 1)
-			};
-			
-			let opcode        = I(6,  0);
-			let rd:  *mut u32 = &mut x[I(11, 7) as usize];
-			let funct3        = I(14, 12);
-			let rs1: *mut u32 = &mut x[I(19, 15) as usize];
-			let rs2: *mut u32 = &mut x[I(24, 20) as usize];
-			let funct7        = I(31, 25);
+			// I(n)(l,r) <=> n[l:r]
+			let I = |n: u32| { move |l: usize, r: usize| {
+				let (l, r) = (if l > r { l } else { r }, if l > r { r } else { l });
+				(n >> r) & ((1 << l - r + 1) - 1)
+			}};
+			// E(n)(c) <=> n extins cu msb-ul de pe pozitia c
+			let E = |n: u32| { move |c: u32| {
+				((n as i32 << 32 - c - 1) >> 32 - c - 1) as u32
+			}};
 
-			let mut ok: bool = false;
-			// pt actiune
-			let mut act = |Opcode: u32, Funct3: u32, Funct7: u32, Description: &dyn Fn()| {
-				if Opcode == opcode && Funct3 == funct3 && Funct7 == funct7 {
-					ok = true;
-					Description();
-				}
-			};
-			unsafe {
-				// "RV32I Base Integer Instructions"
-				// Name     Opcode        FMT      funct3  funct7  Description (C)                                                   Note
-				/* add  */  act(0b0110011, /* R */  0x0,    0x00,   &||{*rd = *rs1 + *rs2});
-				/* sub  */  act(0b0110011, /* R */  0x0,    0x20,   &||{*rd = *rs1 - *rs2});
-				/* xor  */  act(0b0110011, /* R */  0x4,    0x00,   &||{*rd = *rs1 ^ *rs2});
-				/* or   */  act(0b0110011, /* R */  0x6,    0x00,   &||{*rd = *rs1 | *rs2});
-				/* and  */  act(0b0110011, /* R */  0x7,    0x00,   &||{*rd = *rs1 & *rs2});
-				/* sll  */  act(0b0110011, /* R */  0x1,    0x00,   &||{*rd = *rs1 << *rs2});
-				/* srl  */  act(0b0110011, /* R */  0x5,    0x00,   &||{*rd = *rs1 >> *rs2});
-				/* sra  */  act(0b0110011, /* R */  0x5,    0x20,   &||{*rd = ((*rs1 as i32) >> *rs2) as u32});                      /* msb-extends */
-				/* slt  */  act(0b0110011, /* R */  0x2,    0x00,   &||{*rd = if (*rs1 as i32) < (*rs2 as i32) { 1 } else { 0 }});
-				/* sltu */  act(0b0110011, /* R */  0x3,    0x00,   &||{*rd = if *rs1 < *rs2 { 1 } else { 0 }});
+			let opcode = I(instr)(6, 0);
+			match opcode {
+				// Tip R
+				0b0110011 => {
+					let rd     = I(instr)(11, 7) as usize;
+					let funct3 = I(instr)(14, 12);
+					let rs1    = I(instr)(19, 15) as usize;
+					let rs2    = I(instr)(24, 20) as usize;
+					let funct7 = I(instr)(31, 25);
+					match (funct3, funct7) {
+						/* add  */ (0x0, 0x00) => x[rd] = x[rs1] + x[rs2],
+						/* sub  */ (0x0, 0x20) => x[rd] = x[rs1] - x[rs2],
+						/* xor  */ (0x4, 0x00) => x[rd] = x[rs1] ^ x[rs2],
+						/* or   */ (0x6, 0x00) => x[rd] = x[rs1] | x[rs2],
+						/* and  */ (0x7, 0x00) => x[rd] = x[rs1] & x[rs2],
+						/* sll  */ (0x1, 0x00) => x[rd] = x[rs1] << x[rs2],
+						/* srl  */ (0x5, 0x00) => x[rd] = x[rs1] >> x[rs2],
+						/* sra  */ (0x5, 0x20) => x[rd] = ((x[rs1] as i32) >> x[rs2]) as u32,
+						/* slt  */ (0x2, 0x00) => x[rd] = if (x[rs1] as i32) < (x[rs2] as i32) { 1 } else { 0 },
+						/* sltu */ (0x3, 0x00) => x[rd] = if x[rs1] < x[rs2] { 1 } else { 0 },
+						_                      => bad()
+					}
+				},
+				// Tip I (#1)
+				0b0010011 => {
+					let rd     = I(instr)(11, 7) as usize;
+					let funct3 = I(instr)(14, 12);
+					let rs1    = I(instr)(19, 15) as usize;
+					let imm    = E(I(instr)(31, 20))(11);
+					match I(imm)(11, 5) {
+						0x00 => match funct3 {
+							/* slli  */ 0x1 => x[rd] = x[rs1] << I(imm)(0, 4),
+							/* srli  */ 0x5 => x[rd] = x[rs1] >> I(imm)(0, 4),
+							_               => bad()
+						},
+						0x20 => match funct3 {
+							/* srai  */ 0x5 => x[rd] = ((x[rs1] as i32) >> I(imm)(0, 4)) as u32,
+							_               => bad()
+						},
+						_    => match funct3{
+							/* addi  */ 0x0 => x[rd] = x[rs1] + imm,
+							/* xori  */ 0x4 => x[rd] = x[rs1] ^ imm,
+							/* ori   */ 0x6 => x[rd] = x[rs1] | imm,
+							/* andi  */ 0x7 => x[rd] = x[rs1] & imm,
+							/* slti  */ 0x2 => x[rd] = if (x[rs1] as i32) < (imm as i32) { 1 } else { 0 },
+							/* sltiu */ 0x3 => x[rd] = if x[rs1] < imm { 1 } else { 0 },
+							_               => bad()
+						}
+					}
+				},
+				// Tip I (#2)
+				0b0000011 => {
+					let rd     = I(instr)(11, 7) as usize;
+					let funct3 = I(instr)(14, 12);
+					let rs1    = I(instr)(19, 15) as usize;
+					let imm    = E(I(instr)(31, 20))(11);
+					match funct3 {
+						/* lb */ // wip
+						// wip
+						_ => bad()
+					}
+				},
+
 				// wip
-
-				// "RV32M Multiply Extension"
-				// wip
-
-				// wip restul
-			}
-			if !ok {
-				panic!("instructiune invalida/neimplementata");
+				_ => bad()
 			}
 		} else {
 			// wip
