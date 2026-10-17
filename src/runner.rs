@@ -27,9 +27,50 @@ pub fn decode_intruction(instruction: &u32, instruction_len: &usize) {
 	//intruction decoding logic and parameters for opcode and whatnot
 	//maybe make a struct for exe_instr and return that here?
 }
-
 //TBD
-pub fn execute_instruction(){
-
+pub fn execute_instruction(x: &mut [u32; 32], funct3: u32, funct7: u32, rd: usize, rs1: usize, rs2: usize) {
+    match (funct3, funct7) {
+        //ADD
+        (0x0, 0x00) => {
+            x[rd] = x[rs1].wrapping_add(x[rs2]);
+        }
+        //SUB
+        (0x0, 0x20) => {
+            x[rd] = x[rs1].wrapping_sub(x[rs2]);
+        }
+        //XOR
+        (0x4, 0x00) => {
+            x[rd] = x[rs1] ^ x[rs2];
+        }
+        //OR
+        (0x6, 0x00) => {
+            x[rd] = x[rs1] | x[rs2];
+        }
+        //AND
+        (0x7, 0x00) => {
+            x[rd] = x[rs1] & x[rs2];
+        }
+        //SLL
+        (0x1, 0x00) => {
+            x[rd] = x[rs1] << (x[rs2] & 0x1F);
+        }
+        //SRL
+        (0x5, 0x00) => {
+            x[rd] = x[rs1] >> (x[rs2] & 0x1F);
+        }
+        //SRA
+        (0x5, 0x20) => {
+            x[rd] = ((x[rs1] as i32) >> (x[rs2] & 0x1F)) as u32;
+        }
+        //SLT 
+        (0x2, 0x00) => {
+            x[rd] = if (x[rs1] as i32) < (x[rs2] as i32) { 1 } else { 0 };
+        }
+        //SLTU
+        (0x3, 0x00) => {
+            x[rd] = if x[rs1] < x[rs2] { 1 } else { 0 };
+        }
+        _ => {}
+    }
+    x[0]=0;
 }
-		
