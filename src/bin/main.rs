@@ -1,3 +1,4 @@
+#[path = "../runner.rs"]
 mod runner;
 
 fn main() {
