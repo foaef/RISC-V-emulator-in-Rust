@@ -54,7 +54,7 @@ impl ExeInstr {
 		let instr_copy: u32 = instr.instr32;
 		instr.opcode = (instr_copy & 0b01111111) as u8;
 		match instr.opcode {
-			//B-Type
+			//R-Type
 			0b00110011 => {
 				instr.rd = ((instr_copy & 0xF80) >> 7) as u8;
 				instr.funct3 = ((instr_copy & 0x7000) >> 12) as u8;
@@ -62,7 +62,118 @@ impl ExeInstr {
 				instr.rs2 = ((instr_copy & 0x1F00000) >> 20 )as u8;
 				instr.funct7 = ((instr_copy & 0xFE000000) >> 25) as u8;
 			}
-			//Restu dupa 
+
+			//I-type
+			0b00010011 => {
+				instr.rd = ((instr_copy & 0xF80) >> 7) as u8;
+				instr.funct3 = ((instr_copy & 0x7000) >> 12) as u8;
+				instr.rs1 = ((instr_copy & 0xF8000) >> 15) as u8;
+				instr.imm = (instr_copy >> 20) as i32;
+				//rs2 si funct7 nu exista
+								
+				//this sign extends the immediate
+				instr.imm = instr.imm << 20;
+				instr.imm = instr.imm >> 20;
+			}
+			//I-type with different opcode
+			0b11 => {
+				instr.rd = ((instr_copy & 0xF80) >> 7) as u8;
+				instr.funct3 = ((instr_copy & 0x7000) >> 12) as u8;
+				instr.rs1 = ((instr_copy & 0xF8000) >> 15) as u8;
+				instr.imm = (instr_copy >> 20) as i32;
+
+				//this sign extends the immediate
+				instr.imm = instr.imm << 20;
+				instr.imm = instr.imm >> 20;
+			}
+			//I-type jalr
+			0b01100111 => {
+				instr.rd = ((instr_copy & 0xF80) >> 7) as u8;
+				instr.funct3 = ((instr_copy & 0x7000) >> 12) as u8;
+				instr.rs1 = ((instr_copy & 0xF8000) >> 15) as u8;
+				instr.imm = (instr_copy >> 20) as i32;
+
+				//this sign extends the immediate
+				instr.imm = instr.imm << 20;
+				instr.imm = instr.imm >> 20;
+			}
+			//I-type ecall ebreak
+			0b01110011 => {
+				instr.rd = ((instr_copy & 0xF80) >> 7) as u8;
+				instr.funct3 = ((instr_copy & 0x7000) >> 12) as u8;
+				instr.rs1 = ((instr_copy & 0xF8000) >> 15) as u8;
+				instr.imm = (instr_copy >> 20) as i32;
+
+				//this sign extends the immediate
+				instr.imm = instr.imm << 20;
+				instr.imm = instr.imm >> 20;
+			}
+
+			//S-type
+			0b00100011 => {
+				instr.imm = ((instr_copy & 0xF80) >> 7) as i32;
+				instr.funct3 = ((instr_copy & 0x7000) >> 12) as u8;
+				instr.rs1 = ((instr_copy & 0xF8000) >> 15) as u8;
+				instr.rs2 = ((instr_copy & 0x1F00000) >> 20 )as u8;
+				instr.imm |= ((instr_copy >> 25) as i32) >> 21;
+
+				//this sign extends the immediate
+				instr.imm = instr.imm << 20;
+				instr.imm = instr.imm >> 20;
+			}
+
+			//B-type
+			0b01100011 => {
+				instr.funct3 = ((instr_copy & 0x7000) >> 12) as u8;
+				instr.rs1 = ((instr_copy & 0xF8000) >> 15) as u8;
+				instr.rs2 = ((instr_copy & 0x1F00000) >> 20 )as u8;
+
+				//decoding and reconstructing immediate bullshit ahh
+				let imm12   = (instr_copy >> 31) & 0x1;    // Bit 31
+				let imm11   = (instr_copy >> 7)  & 0x1;    // Bit 7
+				let imm10_5 = (instr_copy >> 25) & 0x3F;   // Bits 30:25 (6 bits)
+				let imm4_1  = (instr_copy >> 8)  & 0xF;    // Bits 11:8  (4 bits)
+				// imm[0] is always implicitly 0 
+
+				let raw = (imm12 << 12) | (imm11 << 11) | (imm10_5 << 5) | (imm4_1 << 1);
+
+				instr.imm = ((raw << 19) as i32) >> 19;
+			}
+
+			//U-type
+			0b00110111 => {
+				instr.rd = ((instr_copy & 0xF80) >> 7) as u8;
+				instr.imm = ((instr_copy & 0xFFFFF000) >> 12) as i32;
+
+				//this sign extends the immediate
+				instr.imm = instr.imm << 20;
+				instr.imm = instr.imm >> 20;
+			}
+			//U-type diff opcode
+			0b00010111 => {
+				instr.rd = ((instr_copy & 0xF80) >> 7) as u8;
+				instr.imm = ((instr_copy & 0xFFFFF000) >> 12) as i32;
+
+				//this sign extends the immediate
+				instr.imm = instr.imm << 20;
+				instr.imm = instr.imm >> 20;
+			}
+
+			//J-type
+			0b01101111 => {
+				instr.rd = ((instr_copy & 0xF80) >> 7) as u8;
+
+				//decode BULLSHIT AHH immediate
+				let imm20    = (instr_copy >> 31) & 0x1;       // Bit 31 (1 bit)
+				let imm10_1  = (instr_copy >> 21) & 0x3FF;     // Bits 30:21 (10 bits, mask 0x3FF = 0b1111111111)
+				let imm11    = (instr_copy >> 20) & 0x1;       // Bit 20 (1 bit)
+				let imm19_12 = (instr_copy >> 12) & 0xFF;      // Bits 19:12 (8 bits, mask 0xFF = 0b11111111)
+				// imm[0] is always implicitly 0
+
+				let raw = (imm20 << 20) | (imm19_12 << 12) | (imm11 << 11) | (imm10_1 << 1);
+
+				instr.imm = ((raw << 11) as i32) >> 11;
+			}
 			_ => {}
 		}
 		
