@@ -1,6 +1,20 @@
 use std::fs::File;
 use std::io::{stdin, BufRead, BufReader};
+use std::collections::HashMap;
 use std::env::args;
+
+#[derive(Debug)]
+pub enum Operand {
+	Direct(String),
+	Indirect { offset: String, base: String }
+}
+
+#[derive(Debug)]
+pub struct AsmInstr {
+	pub label: Option<String>,
+	pub name: Option<String>,
+	pub args: Vec<Operand>
+}
 
 fn lex(s: &str) -> Vec<String> {
 	let mut rv: Vec<String> = vec![];
@@ -12,7 +26,7 @@ fn lex(s: &str) -> Vec<String> {
 		let c = bytes[i] as char;
 		if in_str {
 			if c == '"' {
-				// scur.push(c);
+				scur.push(c);
 				in_str = false;
 				rv.push(scur.clone());
 				scur.clear();
@@ -31,9 +45,9 @@ fn lex(s: &str) -> Vec<String> {
 			}
 			scur.push(c);
 			in_str = true;
-		} else if c == ';' || c == '#' {
+		} else if ";#".contains(c) {
 			break
-		} else if c == ',' || c == '(' || c == ')' || c == ':' {
+		} else if ",:()".contains(c) {
 			if !scur.is_empty() {
 				rv.push(scur.clone());
 				scur.clear()
@@ -55,34 +69,76 @@ fn lex(s: &str) -> Vec<String> {
 	rv
 }
 
-fn lexed2instr(vec: &Vec<String>) {
-	let mut v: Vec<&str> = vec![];
-	for x in vec {
-		v.push(x.as_str())
+fn lexed2instr(vec: &[String]) -> Option<AsmInstr> {
+	let v: Vec<&str> = vec
+		.iter()
+		.map(|s| s.as_str())
+		.collect();
+	let (label, instr_wo_label) = match &v[..] {
+		[label, ":", rest @ ..] => (Some(label.to_string()), rest),
+		_ => (None, &v[..])
+	};
+	if instr_wo_label.is_empty() {
+		return Some(AsmInstr {
+			label,
+			name:  None,
+			args:  vec![]
+		})
 	}
-	match &v[..] {
-		[label, ":"] => {
-			println!("eticheta")
-		},
-		[instr, arg1, ",", arg2, ",", arg3] => {
-			println!("instr 3 arg")
-		},
-		[instr, arg1, ",", arg2] => {
-			println!("instr 2 arg")
-		},
-		[instr] => {
-			println!("instr 1 arg")
-		},
-		_ => {
-			println!("?")
-		}
+	let name = Some(instr_wo_label[0].to_string());
+	let mut args: Vec<Operand> = vec![];
+	let bucati: Vec<&[&str]> = (&instr_wo_label[1..])
+		.split(|s| *s == ",")
+		.filter(|s| !s.is_empty())
+		.collect();
+	for buc in bucati {
+		args.push(match buc {
+			[base]
+				=> Operand::Direct(base.to_string()),
+			[offset, "(", base, ")"]
+				=> Operand::Indirect {
+					offset: offset.to_string(),
+					base: base.to_string()
+				},
+			["(", base, ")"]
+				=> Operand::Indirect {
+					offset: "".to_string(),
+					base: base.to_string()
+				},
+			_   => return None
+		})
 	}
-	// wip
+	Some(AsmInstr { label, name, args })
 }
 
 fn assemble(reader: impl BufRead) {
+	let mut instrs: Vec<AsmInstr> = vec![];
+	let mut pc: u32 = 0;
+	let mut symtab: HashMap<String, u32> = HashMap::new();
+
+	//
+	// faza 1
+	//
 	for line in reader.lines() {
-		lexed2instr(&lex(&line.unwrap()));
+		let lexed = lex(&line.unwrap());
+		let Some(instr) = lexed2instr(&lexed) else { continue };
+		if instr.label.is_none() && instr.name.is_none() {
+			continue
+		}
+		if instr.label.is_some() {
+			symtab.insert(instr.label.clone().unwrap(), pc);
+		}
+		if instr.name.is_some() {
+			pc += 4;
+		}
+		instrs.push(instr);
+	}
+
+	//
+	// faza 2
+	//
+	for instr in instrs {
+		// wip
 	}
 }
 

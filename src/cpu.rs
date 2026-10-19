@@ -27,7 +27,7 @@ pub struct ExeInstr{
 }
 
 impl ExeInstr {
-	pub fn fetch_instruction(v: &Vec<u8>, pc: &mut u32, instruction_len: ExeInstr::instr_len) -> u32{
+	pub fn fetch_instruction(v: &Vec<u8>, pc: &mut u32, instruction_len: &mut usize /* ? ExeInstr::instr_len */) -> u32{
 
 			/* 
 				if first byte read has last 2 bits = 1
@@ -50,12 +50,12 @@ impl ExeInstr {
 			return instruction;
 	}
 
-	pub fn decode_intruction(instr: &mut ExeInstr) {
+	pub fn decode_instruction(instr: &mut ExeInstr, instruction_len: &usize) {
 		let instr_copy: u32 = instr.instr32;
-		instr.opcode = (instr_copy & 0xFF) as u8;
+		instr.opcode = (instr_copy & 0b01111111) as u8;
 		match instr.opcode {
 			//B-Type
-			00110011 => {
+			0b00110011 => {
 				instr.rd = ((instr_copy & 0xF80) >> 7) as u8;
 				instr.funct3 = ((instr_copy & 0x7000) >> 12) as u8;
 				instr.rs1 = ((instr_copy & 0xF8000) >> 15) as u8;
