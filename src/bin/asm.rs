@@ -1,5 +1,5 @@
 use std::fs::File;
-use std::io::{stdin, BufRead, BufReader};
+use std::io::{stdin, stdout, BufRead, BufReader};
 use std::collections::HashMap;
 use std::env::args;
 
@@ -111,6 +111,51 @@ fn lexed2instr(vec: &[String]) -> Option<AsmInstr> {
 	Some(AsmInstr { label, name, args })
 }
 
+fn str2reg(s: &String) -> Option<u32> {
+	if s == "zero" { return Some(0) }
+	if s == "ra"   { return Some(1) }
+	if s == "sp"   { return Some(2) }
+	if s == "gp"   { return Some(3) }
+	if s == "tp"   { return Some(4) }
+	if s == "fp"   { return Some(8) }
+	let range = |str: &String| { move |c: u8, l: i8, r: i8, L: u8| {
+		let s = str.as_bytes();
+		if s.len() >= 1 && s[0] == c {
+			let mut n: i8 = -1;
+			if s.len() == 2 {
+				n = (s[1] - b'0') as i8;
+			} else if s.len() == 3 {
+				n = ((s[1] - b'0') * 10 + s[2] - b'0') as i8;
+			}
+			if l <= n && n <= r {
+				Some(L + n as u8)
+			} else {
+				None
+			}
+		} else {
+			None
+		}
+	}};
+	let idx = range(s)(b'x', 0, 31, 0)
+		.or_else(|| range(s)(b't', 0, 2, 5))
+		.or_else(|| range(s)(b't', 3, 6, 25))
+		.or_else(|| range(s)(b'a', 0, 7, 10))
+		.or_else(|| range(s)(b's', 0, 1, 8))
+		.or_else(|| range(s)(b's', 2, 11, 16))
+		.or_else(|| range(s)(b'f', 0, 31, 0))?;
+	Some(idx as u32)
+}
+
+// toate tipurile de instructiuni
+fn emit_R(opcode: u8, rd: u8, funct3: u8, rs1: u8, rs2: u8, funct7: u8) {
+	let out: u32 = opcode
+		| (rd << 7) | (funct3 << 12)
+		| (rs1 << 15) | (rs1 << 20)
+		| (funct7 << 25);
+	let bytes = out.to_le_bytes();
+	io::stdout().write_all(&bytes).unwrap()
+}
+
 fn assemble(reader: impl BufRead) {
 	let mut instrs: Vec<AsmInstr> = vec![];
 	let mut pc: u32 = 0;
@@ -122,16 +167,13 @@ fn assemble(reader: impl BufRead) {
 	for line in reader.lines() {
 		let lexed = lex(&line.unwrap());
 		let Some(instr) = lexed2instr(&lexed) else { continue };
-		if instr.label.is_none() && instr.name.is_none() {
-			continue
-		}
 		if instr.label.is_some() {
 			symtab.insert(instr.label.clone().unwrap(), pc);
 		}
 		if instr.name.is_some() {
 			pc += 4;
+			instrs.push(instr);
 		}
-		instrs.push(instr);
 	}
 
 	//
