@@ -181,7 +181,10 @@ impl ExeInstr {
 
 	//TBD
 //TBD
-    pub fn execute_instruction(x: &mut [u32; 32], funct3: u32, funct7: u32, rd: usize, rs1: usize, rs2: usize, imm: i32, opcode: u8) {
+    pub fn execute_instruction(x: &mut [u32; 32],mem: &mut Vec<u8>,pc: &mut u32, funct3: u32, funct7: u32, rd: usize, rs1: usize, rs2: usize, imm: i32, opcode: u8)-> bool {
+        let cur_pc: u32 = *pc;
+        let mut next_pc: u32 = cur_pc.wrapping_add(4);
+        let mut halt: bool = false;
         match opcode {
             // ADD-SLTU
             0b0110011 => {
@@ -230,7 +233,7 @@ impl ExeInstr {
                 }
             }
 
-            // ADDI-SLTIU
+           // ADDI-SLTIU
             0b0010011 => {
                 match (funct3, (imm >> 5) & 0x7F) {
                     // ADDI
@@ -272,9 +275,140 @@ impl ExeInstr {
                     _ => {}
                 }
             }
-
+ 
+            // LB-LHU
+            0b0000011 => {
+                let addr: usize = x[rs1].wrapping_add(imm as u32) as usize;
+                match funct3 {
+                    // LB
+                    0x0 => {
+                        x[rd] = mem[addr] as i8 as i32 as u32;
+                    }
+                    // LH
+                    0x1 => {
+                        x[rd] = u16::from_le_bytes([mem[addr], mem[addr + 1]]) as i16 as i32 as u32;
+                    }
+                    // LW
+                    0x2 => {
+                        x[rd] = u32::from_le_bytes([mem[addr], mem[addr + 1], mem[addr + 2], mem[addr + 3]]);
+                    }
+                    // LBU
+                    0x4 => {
+                        x[rd] = mem[addr] as u32;
+                    }
+                    // LHU
+                    0x5 => {
+                        x[rd] = u16::from_le_bytes([mem[addr], mem[addr + 1]]) as u32;
+                    }
+                    _ => {}
+                }
+            }
+ 
+            // SB-SW
+            0b0100011 => {
+                let addr: usize = x[rs1].wrapping_add(imm as u32) as usize;
+                match funct3 {
+                    // SB
+                    0x0 => {
+                        mem[addr] = x[rs2] as u8;
+                    }
+                    // SH
+                    0x1 => {
+                        mem[addr..addr + 2].copy_from_slice(&(x[rs2] as u16).to_le_bytes());
+                    }
+                    // SW
+                    0x2 => {
+                        mem[addr..addr + 4].copy_from_slice(&x[rs2].to_le_bytes());
+                    }
+                    _ => {}
+                }
+            }
+ 
+            // BEQ-BGEU
+            0b1100011 => {
+                match funct3 {
+                    // BEQ
+                    0x0 => {
+                        if x[rs1] == x[rs2] {
+                            next_pc = cur_pc.wrapping_add(imm as u32);
+                        }
+                    }
+                    // BNE
+                    0x1 => {
+                        if x[rs1] != x[rs2] {
+                            next_pc = cur_pc.wrapping_add(imm as u32);
+                        }
+                    }
+                    // BLT
+                    0x4 => {
+                        if (x[rs1] as i32) < (x[rs2] as i32) {
+                            next_pc = cur_pc.wrapping_add(imm as u32);
+                        }
+                    }
+                    // BGE
+                    0x5 => {
+                        if (x[rs1] as i32) >= (x[rs2] as i32) {
+                            next_pc = cur_pc.wrapping_add(imm as u32);
+                        }
+                    }
+                    // BLTU
+                    0x6 => {
+                        if x[rs1] < x[rs2] {
+                            next_pc = cur_pc.wrapping_add(imm as u32);
+                        }
+                    }
+                    // BGEU
+                    0x7 => {
+                        if x[rs1] >= x[rs2] {
+                            next_pc = cur_pc.wrapping_add(imm as u32);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+ 
+            // JAL
+            0b1101111 => {
+                x[rd] = cur_pc.wrapping_add(4);
+                next_pc = cur_pc.wrapping_add(imm as u32);
+            }
+ 
+            // JALR
+            0b1100111 => {
+                let target: u32 = x[rs1].wrapping_add(imm as u32) & !1;
+                x[rd] = cur_pc.wrapping_add(4);
+                next_pc = target;
+            }
+ 
+            // LUI
+            0b0110111 => {
+                x[rd] = (imm as u32) << 12;
+            }
+ 
+            // AUIPC
+            0b0010111 => {
+                x[rd] = cur_pc.wrapping_add((imm as u32) << 12);
+            }
+ 
+            // ECALL-EBREAK
+            0b1110011 => {
+                match (funct3, imm) {
+                    // ECALL
+                    (0x0, 0x0) => {
+                        halt = true;
+                    }
+                    // EBREAK
+                    (0x0, 0x1) => {
+                        halt = true;
+                    }
+                    _ => {}
+                }
+            }
+ 
             _ => {}
         }
         x[0] = 0;
+        *pc = next_pc;
+        halt
     }
 } 
