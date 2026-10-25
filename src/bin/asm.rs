@@ -149,7 +149,14 @@ fn str2reg(s: &String) -> Option<u32> {
 fn nth_direct(instr: &AsmInstr, n: usize) -> u32 {
 	match &instr.args[n] {
 		Operand::Direct(s) => str2reg(s).unwrap(),
-		_                  => unreachable!()
+		_                  => panic!("bad direct argument")
+	}
+}
+
+fn nth_imm(instr: &AsmInstr, n: usize) -> u32 {
+	match &instr.args[n] {
+		Operand::Direct(s) => s.parse::<i32>().unwrap() as u32,
+		_                  => panic!("bad imm argument")
 	}
 }
 
@@ -162,6 +169,19 @@ fn emit_r(instr: &AsmInstr, opcode: u32, funct3: u32, funct7: u32) {
 		| (rd << 7) | (funct3 << 12)
 		| (rs1 << 15) | (rs2 << 20)
 		| (funct7 << 25);
+	let bytes = out.to_le_bytes();
+	stdout().write_all(&bytes).unwrap()
+}
+fn emit_i(instr: &AsmInstr, opcode: u32, funct3: u32, srai: bool) {
+	let rd  = nth_direct(instr, 0);
+	let rs1 = nth_direct(instr, 1);
+	let mut imm = nth_imm(instr, 2) & ((1 << 12) - 1);
+	if srai {
+		imm |= 0x20 << 5;
+	}
+	let out: u32 = opcode
+		| (rd << 7) | (funct3 << 12)
+		| (rs1 << 15) | (imm << 20);
 	let bytes = out.to_le_bytes();
 	stdout().write_all(&bytes).unwrap()
 }
@@ -191,18 +211,31 @@ fn assemble(reader: impl BufRead) {
 	//
 	for instr in instrs {
 		match instr.name.as_ref().unwrap().as_str() {
-			"add"  => emit_r(&instr, 0b0110011, 0x0, 0x00),
-			"sub"  => emit_r(&instr, 0b0110011, 0x0, 0x20),
-			"sll"  => emit_r(&instr, 0b0110011, 0x4, 0x00),
-			"slt"  => emit_r(&instr, 0b0110011, 0x6, 0x00),
-			"sltu" => emit_r(&instr, 0b0110011, 0x7, 0x00),
-			"xor"  => emit_r(&instr, 0b0110011, 0x1, 0x00),
-			"srl"  => emit_r(&instr, 0b0110011, 0x5, 0x00),
-			"sra"  => emit_r(&instr, 0b0110011, 0x5, 0x20),
-			"or"   => emit_r(&instr, 0b0110011, 0x2, 0x00),
-			"and"  => emit_r(&instr, 0b0110011, 0x3, 0x00),
-
-
+			// tip R
+			"add"   => emit_r(&instr, 0b0110011, 0x0, 0x00),
+			"sub"   => emit_r(&instr, 0b0110011, 0x0, 0x20),
+			"sll"   => emit_r(&instr, 0b0110011, 0x4, 0x00),
+			"slt"   => emit_r(&instr, 0b0110011, 0x6, 0x00),
+			"sltu " => emit_r(&instr, 0b0110011, 0x7, 0x00),
+			"xor"   => emit_r(&instr, 0b0110011, 0x1, 0x00),
+			"srl"   => emit_r(&instr, 0b0110011, 0x5, 0x00),
+			"sra"   => emit_r(&instr, 0b0110011, 0x5, 0x20),
+			"or"    => emit_r(&instr, 0b0110011, 0x2, 0x00),
+			"and"   => emit_r(&instr, 0b0110011, 0x3, 0x00),
+			// tip I
+			"addi"  => emit_i(&instr, 0b0010011, 0x0, false),
+			"xori"  => emit_i(&instr, 0b0010011, 0x4, false),
+			"ori"   => emit_i(&instr, 0b0010011, 0x6, false),
+			"andi"  => emit_i(&instr, 0b0010011, 0x7, false),
+			"slli"  => emit_i(&instr, 0b0010011, 0x1, false),
+			"srli"  => emit_i(&instr, 0b0010011, 0x5, false),
+			"srai"  => emit_i(&instr, 0b0010011, 0x5, true),
+			"slti"  => emit_i(&instr, 0b0010011, 0x2, false),
+			"sltiu" => emit_i(&instr, 0b0010011, 0x3, false),
+			// offset plm
+			// (wip)
+			
+			// necunoscut
 			&_     => todo!()
 		}
 	}
