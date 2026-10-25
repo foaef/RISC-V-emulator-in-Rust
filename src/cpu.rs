@@ -115,7 +115,7 @@ impl ExeInstr {
 				instr.funct3 = ((instr_copy & 0x7000) >> 12) as u8;
 				instr.rs1 = ((instr_copy & 0xF8000) >> 15) as u8;
 				instr.rs2 = ((instr_copy & 0x1F00000) >> 20 )as u8;
-				instr.imm |= ((instr_copy >> 25) as i32) >> 21;
+				instr.imm |= ((instr_copy >> 25) as i32) << 5;
 
 				//this sign extends the immediate
 				instr.imm = instr.imm << 20;
@@ -144,19 +144,11 @@ impl ExeInstr {
 			0b00110111 => {
 				instr.rd = ((instr_copy & 0xF80) >> 7) as u8;
 				instr.imm = ((instr_copy & 0xFFFFF000) >> 12) as i32;
-
-				//this sign extends the immediate
-				instr.imm = instr.imm << 20;
-				instr.imm = instr.imm >> 20;
 			}
 			//U-type diff opcode
 			0b00010111 => {
 				instr.rd = ((instr_copy & 0xF80) >> 7) as u8;
 				instr.imm = ((instr_copy & 0xFFFFF000) >> 12) as i32;
-
-				//this sign extends the immediate
-				instr.imm = instr.imm << 20;
-				instr.imm = instr.imm >> 20;
 			}
 
 			//J-type
@@ -181,7 +173,7 @@ impl ExeInstr {
 
 	//TBD
 //TBD
-    pub fn execute_instruction(x: &mut [u32; 32],mem: &mut Vec<u8>,pc: &mut u32, funct3: u32, funct7: u32, rd: usize, rs1: usize, rs2: usize, imm: i32, opcode: u8)-> bool {
+    pub fn execute_instruction(x: &mut [u32; 32],mem: &mut Vec<u8>,pc: &mut u32, funct3: u32, funct7: u32, rd: usize, rs1: usize, rs2: usize, imm: i32, opcode: u8) -> bool {
         let cur_pc: u32 = *pc;
         let mut next_pc: u32 = cur_pc.wrapping_add(4);
         let mut halt: bool = false;
@@ -411,4 +403,4 @@ impl ExeInstr {
         *pc = next_pc;
         halt
     }
-} 
+}
