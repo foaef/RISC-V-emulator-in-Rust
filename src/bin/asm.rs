@@ -1,5 +1,5 @@
 use std::fs::File;
-use std::io::{stdin, stdout, BufRead, BufReader};
+use std::io::{Write, stdin, stdout, BufRead, BufReader};
 use std::collections::HashMap;
 use std::env::args;
 
@@ -118,7 +118,7 @@ fn str2reg(s: &String) -> Option<u32> {
 	if s == "gp"   { return Some(3) }
 	if s == "tp"   { return Some(4) }
 	if s == "fp"   { return Some(8) }
-	let range = |str: &String| { move |c: u8, l: i8, r: i8, L: u8| {
+	let range = |str: &String, c: u8, l: i8, r: i8, L: u8| { 
 		let s = str.as_bytes();
 		if s.len() >= 1 && s[0] == c {
 			let mut n: i8 = -1;
@@ -135,25 +135,35 @@ fn str2reg(s: &String) -> Option<u32> {
 		} else {
 			None
 		}
-	}};
-	let idx = range(s)(b'x', 0, 31, 0)
-		.or_else(|| range(s)(b't', 0, 2, 5))
-		.or_else(|| range(s)(b't', 3, 6, 25))
-		.or_else(|| range(s)(b'a', 0, 7, 10))
-		.or_else(|| range(s)(b's', 0, 1, 8))
-		.or_else(|| range(s)(b's', 2, 11, 16))
-		.or_else(|| range(s)(b'f', 0, 31, 0))?;
+	};
+	let idx = range(s, b'x', 0, 31, 0)
+		.or_else(|| range(s, b't', 0, 2, 5))
+		.or_else(|| range(s, b't', 3, 6, 25))
+		.or_else(|| range(s, b'a', 0, 7, 10))
+		.or_else(|| range(s, b's', 0, 1, 8))
+		.or_else(|| range(s, b's', 2, 11, 16))
+		.or_else(|| range(s, b'f', 0, 31, 0))?;
 	Some(idx as u32)
 }
 
+fn nth_direct(instr: &AsmInstr, n: usize) -> u32 {
+	match &instr.args[n] {
+		Operand::Direct(s) => str2reg(s).unwrap(),
+		_                  => unreachable!()
+	}
+}
+
 // toate tipurile de instructiuni
-fn emit_R(opcode: u8, rd: u8, funct3: u8, rs1: u8, rs2: u8, funct7: u8) {
+fn emit_r(instr: &AsmInstr, opcode: u32, funct3: u32, funct7: u32) {
+	let rd  = nth_direct(instr, 0);
+	let rs1 = nth_direct(instr, 1);
+	let rs2 = nth_direct(instr, 2);
 	let out: u32 = opcode
 		| (rd << 7) | (funct3 << 12)
-		| (rs1 << 15) | (rs1 << 20)
+		| (rs1 << 15) | (rs2 << 20)
 		| (funct7 << 25);
 	let bytes = out.to_le_bytes();
-	io::stdout().write_all(&bytes).unwrap()
+	stdout().write_all(&bytes).unwrap()
 }
 
 fn assemble(reader: impl BufRead) {
@@ -180,7 +190,21 @@ fn assemble(reader: impl BufRead) {
 	// faza 2
 	//
 	for instr in instrs {
-		// wip
+		match instr.name.as_ref().unwrap().as_str() {
+			"add"  => emit_r(&instr, 0b0110011, 0x0, 0x00),
+			"sub"  => emit_r(&instr, 0b0110011, 0x0, 0x20),
+			"sll"  => emit_r(&instr, 0b0110011, 0x4, 0x00),
+			"slt"  => emit_r(&instr, 0b0110011, 0x6, 0x00),
+			"sltu" => emit_r(&instr, 0b0110011, 0x7, 0x00),
+			"xor"  => emit_r(&instr, 0b0110011, 0x1, 0x00),
+			"srl"  => emit_r(&instr, 0b0110011, 0x5, 0x00),
+			"sra"  => emit_r(&instr, 0b0110011, 0x5, 0x20),
+			"or"   => emit_r(&instr, 0b0110011, 0x2, 0x00),
+			"and"  => emit_r(&instr, 0b0110011, 0x3, 0x00),
+
+
+			&_     => todo!()
+		}
 	}
 }
 
