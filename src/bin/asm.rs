@@ -154,23 +154,23 @@ fn nth_direct(instr: &AsmInstr, n: usize) -> u32 {
 	}
 }
 
-fn nth_direct_imm(instr: &AsmInstr, n: usize) -> u32 {
+fn nth_direct_imm(instr: &AsmInstr, n: usize) -> i32 {
 	match &instr.args[n] {
-		Operand::Direct(s) => s.parse::<i32>().unwrap() as u32,
+		Operand::Direct(s) => s.parse::<i32>().unwrap(),
 		_                  => panic!("bad imm argument (direct)")
 	}
 }
 
-fn nth_indirect_imm(instr: &AsmInstr, n: usize) -> (u32, u32) {
+fn nth_indirect_imm(instr: &AsmInstr, n: usize) -> (i32, u32) {
 	match &instr.args[n] {
-		Operand::Indirect { offset, base } => (offset.parse::<i32>().unwrap() as u32,
+		Operand::Indirect { offset, base } => (offset.parse::<i32>().unwrap(),
 		                                       str2reg(base).unwrap()),
 		_	                               => panic!("bad imm argument (indirect)")
 	}
 }
 
 fn write_u32(b: u32) {
-	let bytes = b.to_le_bytes();
+	let bytes = b.to_be_bytes();
 	stdout().write_all(&bytes).unwrap()
 }
 
@@ -197,7 +197,7 @@ fn emit_r(instr: &AsmInstr, opcode: u32, funct3: u32, funct7: u32) {
 fn emit_i(instr: &AsmInstr, opcode: u32, funct3: u32, paren: bool, srai: bool) {
 	let rd:  u32;
 	let rs1: u32;
-	let mut imm: u32;
+	let mut imm: i32;
 
 	// reguli
 	if paren {
@@ -221,12 +221,28 @@ fn emit_i(instr: &AsmInstr, opcode: u32, funct3: u32, paren: bool, srai: bool) {
 	}
 	write_u32(opcode
 		| (rd << 7) | (funct3 << 12)
-		| (rs1 << 15) | (imm << 20));
+		| (rs1 << 15) | ((imm as u32) << 20));
 }
-fn emit_b(instr: &AsmInstr, opcode: u32, funct3: u32, symtab: &HashMap<String, u32>) {
+fn emit_s(instr: &AsmInstr, opcode: u32, funct3: u32) {
 	let rs1: u32;
 	let rs2: u32;
-	let imm: u32;
+	let mut imm: i32;
+
+	// reguli
+	assert!(instr.args.len() == 2);
+	assert_matches!(instr.args[0], Operand::Direct(_));
+	assert_matches!(instr.args[1], Operand::Indirect { .. });
+	rs2 = nth_direct(instr, 0);
+	(imm, rs1) = nth_indirect_imm(instr, 1);
+
+	write_u32(opcode
+		| (imm as u32 & 0b11111) | (funct3 << 12)
+		| (rs1 << 15) | (rs2 << 20) | (imm as u32 & 0b111111100000))
+}
+fn emit_b(instr: &AsmInstr, opcode: u32, funct3: u32, symtab: &HashMap<String, u32>, pc: u32) {
+	let rs1: u32;
+	let rs2: u32;
+	let imm: i32;
 
 	// reguli
 	assert!(instr.args.len() == 3);
@@ -240,11 +256,11 @@ fn emit_b(instr: &AsmInstr, opcode: u32, funct3: u32, symtab: &HashMap<String, u
 	assert!(symtab.contains_key(label));
 	rs1 = nth_direct(instr, 0);
 	rs2 = nth_direct(instr, 1);
-	imm = symtab[label];
+	imm = (pc as i32) - (symtab[label] as i32);
 
 	write_u32(opcode
-		| (imm & (0b100000011110) << 7) | (funct3 << 12)
-		| (rs1 << 15) | (rs2 << 20) | (imm & 0b1011111100000))
+		| (imm as u32 & (0b100000011110) << 7) | (funct3 << 12)
+		| (rs1 << 15) | (rs2 << 20) | (imm as u32 & 0b1011111100000))
 }
 
 fn assemble(reader: impl BufRead) {
@@ -270,6 +286,7 @@ fn assemble(reader: impl BufRead) {
 	//
 	// faza 2
 	//
+	pc = 0;
 	for instr in instrs {
 		match instr.name.as_ref().unwrap().as_str() {
 			// tip R
@@ -305,18 +322,22 @@ fn assemble(reader: impl BufRead) {
 				write_u32(0x0000073)
 			}
 			// wip
-			
+			// tip S
+			"sb"    => emit_s(&instr, 0b0010111, 0x0),
+			"sh"    => emit_s(&instr, 0b0010111, 0x1),
+			"sw"    => emit_s(&instr, 0b0010111, 0x2),
 			// tip B
-			"beq"   => emit_b(&instr, 0b0111111, 0x0, &symtab),
-			"bne"   => emit_b(&instr, 0b0111111, 0x1, &symtab),
-			"blt"   => emit_b(&instr, 0b0111111, 0x4, &symtab),
-			"bge"   => emit_b(&instr, 0b0111111, 0x5, &symtab),
-			"bltu"  => emit_b(&instr, 0b0111111, 0x6, &symtab),
-			"bgtu"  => emit_b(&instr, 0b0111111, 0x7, &symtab),
+			"beq"   => emit_b(&instr, 0b0111111, 0x0, &symtab, pc),
+			"bne"   => emit_b(&instr, 0b0111111, 0x1, &symtab, pc),
+			"blt"   => emit_b(&instr, 0b0111111, 0x4, &symtab, pc),
+			"bge"   => emit_b(&instr, 0b0111111, 0x5, &symtab, pc),
+			"bltu"  => emit_b(&instr, 0b0111111, 0x6, &symtab, pc),
+			"bgtu"  => emit_b(&instr, 0b0111111, 0x7, &symtab, pc),
 			
 			// necunoscut
 			&_     => todo!()
 		}
+		pc += 4;
 	}
 }
 
