@@ -170,9 +170,31 @@ fn nth_indirect_imm(instr: &AsmInstr, n: usize) -> (i32, u32) {
 }
 
 fn write_u32(b: u32) {
-	let bytes = b.to_be_bytes();
+	let bytes = b.to_le_bytes();
 	stdout().write_all(&bytes).unwrap()
 }
+
+// the og's
+// I(n)(l,r) <=> n[l:r]
+fn I(n: u32) -> impl Fn(usize, usize) -> u32 {
+	move |l: usize, r: usize| {
+		let (l, r) = (if l > r { l } else { r }, if l > r { r } else { l });
+		(n >> r) & ((1 << l - r + 1) - 1)
+	}
+}
+// E(n)(c) <=> n extins cu msb-ul de pe pozitia c
+fn E(n: u32) -> impl Fn(u32) -> u32 {
+	move |c: u32| {
+		(((n as i32) << 32 - c - 1) >> 32 - c - 1) as u32
+	}
+}
+// B(n)(i) <=> I(n)(i, i)
+fn B (n: u32) -> impl Fn(usize) -> u32 {
+	move |b: usize| {
+		I(n)(b, b)
+	}
+}
+
 
 // toate tipurile de instructiuni
 fn emit_r(instr: &AsmInstr, opcode: u32, funct3: u32, funct7: u32) {
@@ -189,10 +211,11 @@ fn emit_r(instr: &AsmInstr, opcode: u32, funct3: u32, funct7: u32) {
 	rs1 = nth_direct(instr, 1);
 	rs2 = nth_direct(instr, 2);
 	
-	write_u32(opcode
-		| (rd << 7) | (funct3 << 12)
-		| (rs1 << 15) | (rs2 << 20)
-		| (funct7 << 25));
+	write_u32((opcode)
+	        | (rd << 7)
+	        | (funct3 << 12)
+	        | (rs1 << 15) | (rs2 << 20)
+	        | (funct7 << 25))
 }
 fn emit_i(instr: &AsmInstr, opcode: u32, funct3: u32, paren: bool, srai: bool) {
 	let rd:  u32;
@@ -219,14 +242,16 @@ fn emit_i(instr: &AsmInstr, opcode: u32, funct3: u32, paren: bool, srai: bool) {
 	if srai {
 		imm |= 0x20 << 5;
 	}
-	write_u32(opcode
-		| (rd << 7) | (funct3 << 12)
-		| (rs1 << 15) | ((imm as u32) << 20));
+	write_u32((opcode)
+	        | (rd << 7)
+	        | (funct3 << 12)
+	        | (rs1 << 15)
+	        | ((imm as u32) << 20))
 }
 fn emit_s(instr: &AsmInstr, opcode: u32, funct3: u32) {
 	let rs1: u32;
 	let rs2: u32;
-	let mut imm: i32;
+	let imm: i32;
 
 	// reguli
 	assert!(instr.args.len() == 2);
@@ -235,9 +260,12 @@ fn emit_s(instr: &AsmInstr, opcode: u32, funct3: u32) {
 	rs2 = nth_direct(instr, 0);
 	(imm, rs1) = nth_indirect_imm(instr, 1);
 
-	write_u32(opcode
-		| (imm as u32 & 0b11111) | (funct3 << 12)
-		| (rs1 << 15) | (rs2 << 20) | (imm as u32 & 0b111111100000))
+	write_u32((opcode)
+	        | ((I(imm as u32)(4, 0)) << 7)
+	        | (funct3 << 12)
+	        | (rs1 << 15)
+	        | (rs2 << 20)
+	        | (I(imm as u32)(11, 5) << 25))
 }
 fn emit_b(instr: &AsmInstr, opcode: u32, funct3: u32, symtab: &HashMap<String, u32>, pc: u32) {
 	let rs1: u32;
@@ -256,11 +284,14 @@ fn emit_b(instr: &AsmInstr, opcode: u32, funct3: u32, symtab: &HashMap<String, u
 	assert!(symtab.contains_key(label));
 	rs1 = nth_direct(instr, 0);
 	rs2 = nth_direct(instr, 1);
-	imm = (pc as i32) - (symtab[label] as i32);
+	imm = (symtab[label] as i32) - (pc as i32);
 
-	write_u32(opcode
-		| (imm as u32 & (0b100000011110) << 7) | (funct3 << 12)
-		| (rs1 << 15) | (rs2 << 20) | (imm as u32 & 0b1011111100000))
+	write_u32((opcode)
+	        | (((I(imm as u32)(4, 1) << 1) | B(imm as u32)(11)) << 7)
+	        | (funct3 << 12)
+	        | (rs1 << 15)
+	        | (rs2 << 20)
+	        | (((B(imm as u32)(12) << 6) | I(imm as u32)(10, 5)) << 25))
 }
 
 fn assemble(reader: impl BufRead) {
@@ -294,7 +325,7 @@ fn assemble(reader: impl BufRead) {
 			"sub"   => emit_r(&instr, 0b0110011, 0x0, 0x20),
 			"sll"   => emit_r(&instr, 0b0110011, 0x4, 0x00),
 			"slt"   => emit_r(&instr, 0b0110011, 0x6, 0x00),
-			"sltu " => emit_r(&instr, 0b0110011, 0x7, 0x00),
+			"sltu"  => emit_r(&instr, 0b0110011, 0x7, 0x00),
 			"xor"   => emit_r(&instr, 0b0110011, 0x1, 0x00),
 			"srl"   => emit_r(&instr, 0b0110011, 0x5, 0x00),
 			"sra"   => emit_r(&instr, 0b0110011, 0x5, 0x20),
@@ -323,16 +354,16 @@ fn assemble(reader: impl BufRead) {
 			}
 			// wip
 			// tip S
-			"sb"    => emit_s(&instr, 0b0010111, 0x0),
-			"sh"    => emit_s(&instr, 0b0010111, 0x1),
-			"sw"    => emit_s(&instr, 0b0010111, 0x2),
+			"sb"    => emit_s(&instr, 0b0100011, 0x0),
+			"sh"    => emit_s(&instr, 0b0100011, 0x1),
+			"sw"    => emit_s(&instr, 0b0100011, 0x2),
 			// tip B
-			"beq"   => emit_b(&instr, 0b0111111, 0x0, &symtab, pc),
-			"bne"   => emit_b(&instr, 0b0111111, 0x1, &symtab, pc),
-			"blt"   => emit_b(&instr, 0b0111111, 0x4, &symtab, pc),
-			"bge"   => emit_b(&instr, 0b0111111, 0x5, &symtab, pc),
-			"bltu"  => emit_b(&instr, 0b0111111, 0x6, &symtab, pc),
-			"bgtu"  => emit_b(&instr, 0b0111111, 0x7, &symtab, pc),
+			"beq"   => emit_b(&instr, 0b1100011, 0x0, &symtab, pc),
+			"bne"   => emit_b(&instr, 0b1100011, 0x1, &symtab, pc),
+			"blt"   => emit_b(&instr, 0b1100011, 0x4, &symtab, pc),
+			"bge"   => emit_b(&instr, 0b1100011, 0x5, &symtab, pc),
+			"bltu"  => emit_b(&instr, 0b1100011, 0x6, &symtab, pc),
+			"bgtu"  => emit_b(&instr, 0b1100011, 0x7, &symtab, pc),
 			
 			// necunoscut
 			&_     => todo!()
