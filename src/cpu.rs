@@ -1,3 +1,6 @@
+use crate::asm;
+use std::io;
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Instruction {
     // ---- R-type: rd = rs1 <op> rs2 ----
@@ -396,7 +399,40 @@ impl Instruction {
  
         // ---------- System ----------
         Instruction::Ecall => halt = true,
-        Instruction::Ebreak => halt = true,
+        Instruction::Ebreak => {
+			println!(concat!(
+				"Debugger\n",
+				"q -- quit\n",
+				"<len> @ <addr> -- print <len> bytes at address <addr>\n",
+				"<reg> -- print register of name <reg> (including pc)"));
+			loop {
+				eprint!("> ");
+				let mut str = String::new();
+				if !io::stdin().read_line(&mut str).is_ok() {
+					break
+				}
+				let words: Vec<&str> = str.split_whitespace().collect();
+				match words.as_slice() {
+					&[s_len, "@", s_addr] => {
+						let len  = s_len.parse::<usize>();
+						let addr = s_addr.parse::<usize>();
+						match (len, addr) {
+							(Ok(L), Ok(A)) => println!("{:?}", &mem[A..A + L]),
+							_              => println!("bad range.")
+						}
+					}
+					&["q"]                => break,
+					&[reg]                => {
+						match asm::str2reg(&reg.to_string()) {
+							Some(n) => println!("{} = {}", n, x[n as usize]),
+							_       => eprintln!("bad register.")
+						}
+					}
+					&[]                   => {},
+					_                     => eprintln!("bad command.")
+				}
+			}
+		}
         Instruction::Fence => {} // nothing to do in a simple single-core emulator
  
         Instruction::Illegal(raw) => {

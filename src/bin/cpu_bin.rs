@@ -1,5 +1,4 @@
-mod cpu;
-use cpu::Instruction;
+use RISC_V_emulator_in_Rust::cpu::Instruction;
 use std::{env, fs, io};
 
 fn boot(file: &String, memsize: usize) -> io::Result<Vec<u8>> {
@@ -22,11 +21,6 @@ fn boot(file: &String, memsize: usize) -> io::Result<Vec<u8>> {
 			break;
 		}
 	}
-
-	println!();
-    println!("x5 (sum)           = {}", x[5]);
-    println!("x9 (loaded back)   = {}", x[9]);
-    println!("mem[256..260]      = {:?}", &mem[256..260]);
 	Ok(mem)
 }
 

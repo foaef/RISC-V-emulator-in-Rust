@@ -9,4 +9,5 @@ label:
 	addi x8, x0, 256   ; x8 = address 256
 	sw   x5, 0(x8)     ; mem[256] = sum
 	lw   x9, 0(x8)     ; x9 = mem[256]
+	ebreak             ; print x5, x9
 	ecall              ; stop

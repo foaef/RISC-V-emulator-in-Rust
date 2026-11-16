@@ -2,6 +2,9 @@
 name = "RISC-V-emulator-in-Rust"
 version = "0.1.0"
 edition = "2024"
-default-run = "RISC-V-emulator-in-Rust"
+default-run = "cpu_bin"
 
 [dependencies]
+
+[lints.rust]
+non_snake_case = "allow"

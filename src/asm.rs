@@ -1,8 +1,6 @@
 use std::assert_matches;
 use std::collections::HashMap;
-use std::fs::File;
-use std::io::{BufRead, BufReader, Write, stdin, stdout};
-use std::env::args;
+use std::io::{BufRead, Write, stdout};
 
 #[derive(Debug)]
 pub enum Operand {
@@ -17,7 +15,7 @@ pub struct AsmInstr {
 	pub args: Vec<Operand>
 }
 
-fn lex(s: &str) -> Vec<String> {
+pub fn lex(s: &str) -> Vec<String> {
 	let mut rv: Vec<String> = vec![];
 	let mut scur: String = Default::default();
 	let mut in_str = false;
@@ -70,7 +68,7 @@ fn lex(s: &str) -> Vec<String> {
 	rv
 }
 
-fn lexed2instr(vec: &[String]) -> Option<AsmInstr> {
+pub fn lexed2instr(vec: &[String]) -> Option<AsmInstr> {
 	let v: Vec<&str> = vec
 		.iter()
 		.map(|s| s.as_str())
@@ -112,7 +110,7 @@ fn lexed2instr(vec: &[String]) -> Option<AsmInstr> {
 	Some(AsmInstr { label, name, args })
 }
 
-fn str2reg(s: &String) -> Option<u32> {
+pub fn str2reg(s: &String) -> Option<u32> {
 	if s == "zero" { return Some(0) }
 	if s == "ra"   { return Some(1) }
 	if s == "sp"   { return Some(2) }
@@ -147,21 +145,21 @@ fn str2reg(s: &String) -> Option<u32> {
 	Some(idx as u32)
 }
 
-fn nth_direct(instr: &AsmInstr, n: usize) -> u32 {
+pub fn nth_direct(instr: &AsmInstr, n: usize) -> u32 {
 	match &instr.args[n] {
 		Operand::Direct(s) => str2reg(s).unwrap(),
 		_                  => panic!("bad direct argument")
 	}
 }
 
-fn nth_direct_imm(instr: &AsmInstr, n: usize) -> i32 {
+pub fn nth_direct_imm(instr: &AsmInstr, n: usize) -> i32 {
 	match &instr.args[n] {
 		Operand::Direct(s) => s.parse::<i32>().unwrap(),
 		_                  => panic!("bad imm argument (direct)")
 	}
 }
 
-fn nth_indirect_imm(instr: &AsmInstr, n: usize) -> (i32, u32) {
+pub fn nth_indirect_imm(instr: &AsmInstr, n: usize) -> (i32, u32) {
 	match &instr.args[n] {
 		Operand::Indirect { offset, base } => {
 			(if offset.is_empty() {
@@ -174,27 +172,27 @@ fn nth_indirect_imm(instr: &AsmInstr, n: usize) -> (i32, u32) {
 	}
 }
 
-fn write_u32(b: u32) {
+pub fn write_u32(b: u32) {
 	let bytes = b.to_le_bytes();
 	stdout().write_all(&bytes).unwrap()
 }
 
 // the og's
 // I(n)(l,r) <=> n[l:r]
-fn I(n: u32) -> impl Fn(usize, usize) -> u32 {
+pub fn I(n: u32) -> impl Fn(usize, usize) -> u32 {
 	move |l: usize, r: usize| {
 		let (l, r) = (if l > r { l } else { r }, if l > r { r } else { l });
 		(n >> r) & ((1 << l - r + 1) - 1)
 	}
 }
 // E(n)(c) <=> n extins cu msb-ul de pe pozitia c
-fn E(n: u32) -> impl Fn(u32) -> u32 {
+pub fn E(n: u32) -> impl Fn(u32) -> u32 {
 	move |c: u32| {
 		(((n as i32) << 32 - c - 1) >> 32 - c - 1) as u32
 	}
 }
 // B(n)(i) <=> I(n)(i, i)
-fn B (n: u32) -> impl Fn(usize) -> u32 {
+pub fn B (n: u32) -> impl Fn(usize) -> u32 {
 	move |b: usize| {
 		I(n)(b, b)
 	}
@@ -202,7 +200,7 @@ fn B (n: u32) -> impl Fn(usize) -> u32 {
 
 
 // toate tipurile de instructiuni
-fn emit_r(instr: &AsmInstr, opcode: u32, funct3: u32, funct7: u32) {
+pub fn emit_r(instr: &AsmInstr, opcode: u32, funct3: u32, funct7: u32) {
 	let rd:  u32;
 	let rs1: u32;
 	let rs2: u32;
@@ -223,7 +221,7 @@ fn emit_r(instr: &AsmInstr, opcode: u32, funct3: u32, funct7: u32) {
 			| (rs2 << 20)
 	        | (funct7 << 25))
 }
-fn emit_i(instr: &AsmInstr, opcode: u32, funct3: u32, paren: bool, srai: bool) {
+pub fn emit_i(instr: &AsmInstr, opcode: u32, funct3: u32, paren: bool, srai: bool) {
 	let rd:  u32;
 	let rs1: u32;
 	let mut imm: i32;
@@ -254,7 +252,7 @@ fn emit_i(instr: &AsmInstr, opcode: u32, funct3: u32, paren: bool, srai: bool) {
 	        | (rs1 << 15)
 	        | ((imm as u32) << 20))
 }
-fn emit_s(instr: &AsmInstr, opcode: u32, funct3: u32) {
+pub fn emit_s(instr: &AsmInstr, opcode: u32, funct3: u32) {
 	let rs1: u32;
 	let rs2: u32;
 	let imm: i32;
@@ -273,7 +271,7 @@ fn emit_s(instr: &AsmInstr, opcode: u32, funct3: u32) {
 	        | (rs2 << 20)
 	        | (I(imm as u32)(11, 5) << 25))
 }
-fn emit_b(instr: &AsmInstr, opcode: u32, funct3: u32, symtab: &HashMap<String, u32>, pc: u32) {
+pub fn emit_b(instr: &AsmInstr, opcode: u32, funct3: u32, symtab: &HashMap<String, u32>, pc: u32) {
 	let rs1: u32;
 	let rs2: u32;
 	let imm: i32;
@@ -299,7 +297,7 @@ fn emit_b(instr: &AsmInstr, opcode: u32, funct3: u32, symtab: &HashMap<String, u
 	        | (rs2 << 20)
 	        | (((B(imm as u32)(12) << 6) | I(imm as u32)(10, 5)) << 25))
 }
-fn emit_u(instr: &AsmInstr, opcode: u32) {
+pub fn emit_u(instr: &AsmInstr, opcode: u32) {
 	let rd:  u32;
 	let imm: i32;
 
@@ -314,7 +312,7 @@ fn emit_u(instr: &AsmInstr, opcode: u32) {
 	        | (rd << 7)
 	        | ((I(imm as u32)(31, 12) << 12)))
 }
-fn emit_j(instr: &AsmInstr, opcode: u32, symtab: &HashMap<String, u32>, pc: u32) {
+pub fn emit_j(instr: &AsmInstr, opcode: u32, symtab: &HashMap<String, u32>, pc: u32) {
 	let rd:  u32;
 	let imm: i32;
 
@@ -336,7 +334,7 @@ fn emit_j(instr: &AsmInstr, opcode: u32, symtab: &HashMap<String, u32>, pc: u32)
 	        | ((I(u)(19, 12) | (B(u)(11) << 20) | (I(u)(10, 1) << 21) | (B(u)(20) << 31)) << 12))
 }
 
-fn assemble(reader: impl BufRead) {
+pub fn assemble(reader: impl BufRead) {
 	let mut instrs: Vec<AsmInstr> = vec![];
 	let mut pc: u32 = 0;
 	let mut symtab: HashMap<String, u32> = HashMap::new();
@@ -417,19 +415,5 @@ fn assemble(reader: impl BufRead) {
 			&_     => todo!()
 		}
 		pc += 4;
-	}
-}
-
-fn main() {
-	if args().len() == 1 {
-		assemble(stdin().lock())
-	} else {
-		for arg in args().skip(1) {
-			if arg == "-" {
-				assemble(stdin().lock())
-			} else {
-				assemble(BufReader::new(File::open(&arg).unwrap()))
-			}
-		}
 	}
 }

@@ -13,9 +13,9 @@ rm *.o .*.o .o
 cd ..
 cargo build
 cd test
-../target/debug/asm "$arg1.asm" > "$arg1.o"
+../target/debug/asm_bin "$arg1.asm" > "$arg1.o"
 echo ========Cod de asm========
 od -An -v -t x4 -w4 "$arg1.o"
 echo =======Executie sim=======
-../target/debug/RISC-V-emulator-in-Rust "$arg1.o"
+../target/debug/cpu_bin "$arg1.o"
 
