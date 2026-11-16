@@ -1,4 +1,4 @@
-# suma lui gauss
+; suma lui gauss
 	addi x5, x0, 0     ; sum = 0
 	addi x6, x0, 1     ; i = 1
 	addi x7, x0, 11    ; limit = 11
