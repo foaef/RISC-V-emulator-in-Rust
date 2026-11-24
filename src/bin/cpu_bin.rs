@@ -1,27 +1,14 @@
-use RISC_V_emulator_in_Rust::cpu::Instruction;
+use RISC_V_emulator_in_Rust::cpu::Cpu;
 use std::{env, fs, io};
 
-fn boot(file: &String, memsize: usize) -> io::Result<Vec<u8>> {
+fn boot(file: &String, memsize: usize) -> io::Result<()> {
 	let mut mem: Vec<u8> = fs::read(file)?;
 	if memsize > mem.len() {
 		mem.resize(memsize, 0u8)
 	}
-	let mut x = [0u32; 32];
-	let mut pc: u32 = 0;
-
-	// fetch->decode->execute
-	loop {
-		let mut len = 0;
-		let raw = Instruction::fetch_instruction(&mem, &mut pc, &mut len);
-		let instr = Instruction::decode_instruction(raw);
-		println!("pc={:#06x}  raw={:#010x}  {:?}", pc, raw, instr);
-
-		let halt = Instruction::execute_instruction(&mut x, &mut mem, &mut pc, instr);
-		if halt {
-			break;
-		}
-	}
-	Ok(mem)
+	let mut cpu = Cpu::new(mem);
+	cpu.run();
+	Ok(())
 }
 
 fn usage(prog: &String) {
